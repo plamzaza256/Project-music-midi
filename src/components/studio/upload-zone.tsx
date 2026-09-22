@@ -10,29 +10,9 @@ import { cn } from "@/lib/utils";
 import type { Dict } from "@/i18n";
 import type { ProcessStage } from "@/lib/studio/types";
 
-type Track = {
-  name: string;
-  kind: "file" | "url" | "sample";
-  src: string;
-  objectUrl?: string;
-  isVideo?: boolean;
-};
+export type TrackKind = "file" | "url" | "sample";
 
-type Props = {
-  stage: ProcessStage;
-  /** Null until the user has loaded/uploaded something. */
-  track: Track | null;
-  onFile: (file: File) => void;
-  onUrl: (url: string) => void;
-  onSample: () => void;
-  onClear: () => void;
-};
-
-const ACCEPT = "audio/*,video/mp4,video/webm,video/quicktime,video/mp4,video";
-const ACCEPT_ATTR = ".mp3,.wav,.m4a,.aac,.ogg,.oga,.mp4,.webm,.mov,.m4v";
-const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
-
-const ACCEPT_EXTENSIONS = [
+export const ACCEPT_EXTENSIONS = [
   "mp3",
   "wav",
   "m4a",
@@ -43,7 +23,21 @@ const ACCEPT_EXTENSIONS = [
   "webm",
   "mov",
   "m4v",
-];
+] as const;
+
+export const ACCEPT_ATTR = ".mp3,.wav,.m4a,.aac,.ogg,.oga,.mp4,.webm,.mov,.m4v";
+
+export const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
+
+type Props = {
+  stage: ProcessStage;
+  /** Null until the user has loaded/uploaded something. */
+  track: { name: string; kind: TrackKind; isVideo?: boolean } | null;
+  onFile: (file: File) => void;
+  onUrl: (url: string) => void;
+  onSample: () => void;
+  onClear: () => void;
+};
 
 export function UploadZone(props: Props) {
   const { stage, track, onFile, onUrl, onSample, onClear } = props;
@@ -51,23 +45,11 @@ export function UploadZone(props: Props) {
   const [drag, setDrag] = React.useState(false);
   const [urlValue, setUrlValue] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
   const hasTrack = !!track;
 
   function handleFiles(files: FileList | File[]) {
-    const list = Array.from(files);
-    const file = list[0];
+    const file = Array.from(files)[0];
     if (!file) return;
-
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    if (!ACCEPT_EXTENSIONS.includes(ext)) {
-      setError(`${dict.studio.upload.unsupported} ${file.name}`);
-      return;
-    }
-    if (file.size > MAX_SIZE) {
-      setError(`${dict.studio.upload.maxSize} — ${dict.studio.upload.formats}`);
-      return;
-    }
     setError(null);
     onFile(file);
   }
@@ -99,15 +81,6 @@ export function UploadZone(props: Props) {
   return (
     <div className="flex flex-col gap-3">
       <div
-        role="button"
-        tabIndex={0}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
         onDragOver={(e) => {
           e.preventDefault();
           setDrag(true);
@@ -118,13 +91,12 @@ export function UploadZone(props: Props) {
         }}
         onDrop={handleDrop}
         className={cn(
-          "group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-card/40 px-6 py-12 text-center transition-all",
+          "relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-card/40 px-6 py-12 text-center transition-all",
           drag &&
             "scale-[1.01] border-cyan-400/70 bg-cyan-400/10 shadow-[0_0_40px_rgba(34,211,238,0.25)]",
-          "hover:border-violet-500/50 hover:bg-violet-500/5",
         )}
       >
-        <span className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-400/20 text-cyan-300 transition-transform group-hover:scale-110">
+        <span className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-400/20 text-cyan-300">
           <UploadCloud className="size-7" />
         </span>
         <div>
@@ -137,15 +109,32 @@ export function UploadZone(props: Props) {
           <Badge variant="violet">{dict.studio.upload.formats}</Badge>
           <Badge variant="outline">{dict.studio.upload.maxSize}</Badge>
         </div>
+
         <div className="mt-1 flex gap-2">
-          <Button type="button" size="sm" variant="cyan">
+          {/* A native <label> wrapping a file input fires the OS file picker
+              without JS window.open/custom clicks — reliable inside iframes
+              and sandboxed previews. */}
+          <label
+            className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md bg-accent px-3 text-sm font-medium text-accent-foreground shadow transition-colors hover:bg-accent/90 [&_svg]:size-4"
+          >
             {dict.studio.upload.browse}
-          </Button>
+            <input
+              type="file"
+              accept={ACCEPT_ATTR}
+              className="sr-only"
+              onChange={(e) => {
+                if (e.target.files?.length) handleFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
               onSample();
             }}
@@ -154,16 +143,6 @@ export function UploadZone(props: Props) {
             {dict.studio.upload.demo}
           </Button>
         </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPT_ATTR}
-          className="sr-only"
-          onChange={(e) => {
-            if (e.target.files) handleFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
       </div>
 
       {/* URL row */}
@@ -175,6 +154,11 @@ export function UploadZone(props: Props) {
           <input
             value={urlValue}
             onChange={(e) => setUrlValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && urlValue.trim()) {
+                onUrl(urlValue.trim());
+              }
+            }}
             placeholder={dict.studio.upload.urlPlaceholder}
             aria-label={dict.studio.upload.urlLabel}
             className="h-10 w-full rounded-lg border border-border bg-card pl-12 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/20"
@@ -186,20 +170,16 @@ export function UploadZone(props: Props) {
           variant="secondary"
           className="shrink-0"
           disabled={!urlValue.trim()}
-          onClick={() => {
-            const u = urlValue.trim();
-            if (!u) return;
-            if (!/^https?:\/\//i.test(u)) {
-              setError("Invalid URL — must start with http(s)://");
-              return;
-            }
-            setError(null);
-            onUrl(u);
-          }}
+          onClick={() => onUrl(urlValue.trim())}
         >
           {dict.studio.upload.loadUrl}
         </Button>
       </div>
+
+      {/* URL guidance */}
+      <p className="text-xs text-muted-foreground">
+        {dict.studio.upload.urlHint}
+      </p>
 
       {error && (
         <p className="text-sm text-destructive" role="alert">
@@ -210,13 +190,28 @@ export function UploadZone(props: Props) {
   );
 }
 
+/**
+ * Validate a user-picked file and return a friendly error message (or null).
+ * Centralized so both UploadZone and the Studio page can reuse it.
+ */
+export function validateFile(file: File, dict: Dict): string | null {
+  const ext = (file.name.split(".").pop() ?? "").toLowerCase();
+  if (!ACCEPT_EXTENSIONS.includes(ext as never)) {
+    return `${dict.studio.upload.unsupported} ${file.name}`;
+  }
+  if (file.size > MAX_SIZE) {
+    return `${dict.studio.upload.maxSize} — ${dict.studio.upload.formats}`;
+  }
+  return null;
+}
+
 function ReadyCard({
   track,
   busy,
   onClear,
   dict,
 }: {
-  track: Track;
+  track: { name: string; kind: TrackKind; isVideo?: boolean };
   busy: boolean;
   onClear: () => void;
   dict: Dict;
@@ -226,12 +221,13 @@ function ReadyCard({
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400" />
       <div className="flex items-center gap-4 p-4">
         {track.isVideo ? (
-          <video
-            src={track.objectUrl ?? track.src}
-            muted
-            playsInline
-            className="h-16 w-24 shrink-0 rounded-lg border border-border bg-black object-cover"
-          />
+          <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-lg border border-border bg-black">
+            <video
+              muted
+              playsInline
+              className="h-full w-full object-cover"
+            />
+          </div>
         ) : (
           <div className="grid h-16 w-24 shrink-0 place-items-center rounded-lg border border-border bg-gradient-to-br from-violet-500/15 to-cyan-400/15 text-cyan-300">
             <Music4 className="size-7" />
@@ -251,9 +247,7 @@ function ReadyCard({
             {track.isVideo && (
               <Badge variant="outline">{dict.studio.upload.videoHint}</Badge>
             )}
-            <span>
-              {dict.studio.upload.processingHint}
-            </span>
+            <span>{dict.studio.upload.processingHint}</span>
           </div>
         </div>
 
@@ -271,5 +265,3 @@ function ReadyCard({
     </div>
   );
 }
-
-export { ACCEPT };

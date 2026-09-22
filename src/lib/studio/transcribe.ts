@@ -30,21 +30,54 @@ function getAudioContext(): AudioContext {
   return audioCtx;
 }
 
-/** Fetch an audio source and decode it into an AudioBuffer. */
-export async function decodeSource(src: string): Promise<AudioBuffer> {
-  const res = await fetch(src);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch audio (HTTP ${res.status})`);
+/** Fetch an audio source (with a timeout) and decode it into an AudioBuffer. */
+export async function decodeSource(
+  src: string,
+  timeoutMs = 30000,
+): Promise<AudioBuffer> {
+  let res: Response;
+  try {
+    res = await fetch(src);
+  } catch {
+    throw new Error(
+      "decode: network unreachable — the browser could not fetch this source (CORS or offline).",
+    );
   }
-  const arrayBuffer = await res.arrayBuffer();
+  if (!res.ok) {
+    throw new Error(`decode: fetch returned HTTP ${res.status}`);
+  }
 
-  // Wrap the ArrayBuffer in a new Uint8Array so we can clone() without
-  // serializing a SharedArrayBuffer/Transferred buffer.
+  let arrayBuffer: ArrayBuffer;
+  try {
+    arrayBuffer = await Promise.race([
+      res.arrayBuffer(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("decode: fetch timed out")), timeoutMs),
+      ),
+    ]);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("decode:")) throw e;
+    throw new Error("decode: failed to read response body");
+  }
+
+  return decodeAudioBuffer(arrayBuffer);
+}
+
+/** Decode raw bytes into an AudioBuffer. */
+export async function decodeAudioBuffer(
+  arrayBuffer: ArrayBuffer,
+): Promise<AudioBuffer> {
+  // Wrap in a fresh Uint8Array so clone() doesn't touch a transferred buffer.
   return await new Promise<AudioBuffer>((resolve, reject) => {
     getAudioContext().decodeAudioData(
       arrayBuffer.slice(0),
       resolve,
-      (err) => reject(new Error(`Audio decoding failed: ${String(err)}`)),
+      (err) =>
+        reject(
+          new Error(
+            `decode: unsupported or corrupt audio (${String(err)})`,
+          ),
+        ),
     );
   });
 }

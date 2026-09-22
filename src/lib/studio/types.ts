@@ -20,18 +20,19 @@ export type ProcessStage =
   | "done";
 
 /** Fallback BPM when nothing better is known (mock / demo). */
-export const DEFAULT_TEMPO = 120;
+export const DEFAULT_TEMPO = 100;
 
 /**
- * Mock = MainTheme with a touch of Nuvole Bianche
- * (160s at 120 BPM; used anywhere a demo track is needed).
- * See LICENSE_NOTES.md for attribution.
+ * Bundled demo track — a synthesized, public-domain "Ode to Joy" WAV that is
+ * served from our own public/ directory. This guarantees the "Try sample
+ * audio" button always plays, with no external hosts, CORS, or network
+ * dependencies (important for sandboxed / proxied previews).
  */
-export const DEMO_TRACK_URL =
-  "https://upload.wikimedia.org/wikipedia/commons/4/49/MainTheme_with_a_touch_of_Nuvole_Bianche.ogg";
+export const DEMO_TRACK_URL = "/demo/pianomind-demo.wav";
 
 export const DEMO_TRACK = {
-  name: "MainTheme (Demo)",
+  name: "Ode to Joy (Demo)",
   kind: "sample" as const,
   src: DEMO_TRACK_URL,
+  durationSeconds: 19.6,
 };

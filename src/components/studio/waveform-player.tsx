@@ -72,8 +72,8 @@ export const WaveformPlayer = React.forwardRef<
       barGap: 2,
       barRadius: 3,
       cursorWidth: 1,
-      progressColor: "#8b5cf6", // violet
-      waveColor: "#3a3a4a",
+      progressColor: "#22d3ee", // cyan
+      waveColor: "#7c7c95",
       cursorColor: "#ffffff",
       interact: true,
       dragToSeek: false,
@@ -98,9 +98,9 @@ export const WaveformPlayer = React.forwardRef<
     ws.on("play", () => setPlaying(true));
     ws.on("pause", () => setPlaying(false));
     ws.on("finish", () => setPlaying(false));
-    ws.on("error", () => {
+    ws.on("error", (err) => {
       setReady(false);
-      onError?.("waveform error");
+      onError?.(`decoder: ${String(err ?? "unknown")}`);
     });
 
     wsRef.current = ws;
@@ -118,8 +118,8 @@ export const WaveformPlayer = React.forwardRef<
     setReady(false);
     setCurrent(0);
     setDuration(0);
-    ws.load(src).catch(() => {
-      onError?.("load failed");
+    ws.load(src).catch((e) => {
+      onError?.(`decoder: ${String(e ?? "unknown")}`);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src]);
@@ -197,8 +197,7 @@ export const WaveformPlayer = React.forwardRef<
                     )}
                   </span>
                 )}
-              </p>
-            </div>
+              </p>            </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">

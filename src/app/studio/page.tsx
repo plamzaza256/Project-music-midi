@@ -16,7 +16,7 @@ import { useLanguage } from "@/components/language-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UploadZone } from "@/components/studio/upload-zone";
+import { UploadZone, validateFile, type TrackKind } from "@/components/studio/upload-zone";
 import {
   WaveformPlayer,
   type WaveformPlayerHandle,
@@ -29,7 +29,7 @@ import {
   downloadBytes,
   transcribeToNotes,
 } from "@/lib/studio/transcribe";
-import { generateMockNotes, midiToName } from "@/lib/studio/notes";
+import { midiToName } from "@/lib/studio/notes";
 import {
   DEMO_TRACK,
   DEFAULT_TEMPO,
@@ -41,16 +41,37 @@ const PROCESSING_MIN_MS = 2500;
 
 type Track = {
   name: string;
-  kind: "file" | "url" | "sample";
+  kind: TrackKind;
   src: string;
   objectUrl?: string;
   isVideo?: boolean;
 };
 
-function hashString(s: string): number {
-  let h = 7;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h;
+/** Heuristically best-effort trim of a URL to a likely file name. */
+function urlToName(url: string): string {
+  try {
+    const u = new URL(url);
+    const last = u.pathname.split("/").pop() || "";
+    if (last) return decodeURIComponent(last).slice(0, 60);
+    return u.hostname;
+  } catch {
+    return url.slice(0, 60);
+  }
+}
+
+function looksLikeAudioFile(url: string): boolean {
+  try {
+    const path = new URL(url).pathname;
+    return /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|weba)$/i.test(path);
+  } catch {
+    return false;
+  }
+}
+
+function isPageUrl(url: string): boolean {
+  return /(youtube\.com|youtu\.be|soundcloud\.com|spotify\.com|facebook\.com|instagram\.com|tiktok\.com)/i.test(
+    url,
+  );
 }
 
 function baseName(name: string): string {
@@ -119,33 +140,74 @@ export default function StudioPage() {
   }, [track]);
 
   // ---- input handlers ---------------------------------------------------
-  const handleFile = React.useCallback((file: File) => {
-    setError(null);
-    const objectUrl = URL.createObjectURL(file);
-    const isVideo = file.type.startsWith("video");
-    setTrack({
-      name: file.name,
-      kind: "file",
-      src: objectUrl,
-      objectUrl,
-      isVideo,
-    });
-    setNotes([]);
-    setStage("uploaded");
-    setTempo(DEFAULT_TEMPO);
-  }, []);
+  const handleFile = React.useCallback(
+    (file: File) => {
+      setError(null);
+      const fileError = validateFile(file, dict);
+      if (fileError) {
+        setError(fileError);
+        return;
+      }
+      const objectUrl = URL.createObjectURL(file);
+      const isVideo = file.type.startsWith("video");
+      setTrack({
+        name: file.name,
+        kind: "file",
+        src: objectUrl,
+        objectUrl,
+        isVideo,
+      });
+      setNotes([]);
+      setStage("uploaded");
+      setTempo(DEFAULT_TEMPO);
+    },
+    [dict],
+  );
 
-  const handleUrl = React.useCallback((url: string) => {
-    setError(null);
-    setTrack({
-      name: url.split("/").pop()?.slice(0, 60) || url,
-      kind: "url",
-      src: url,
-    });
-    setNotes([]);
-    setStage("uploaded");
-    setTempo(DEFAULT_TEMPO);
-  }, []);
+  const handleUrl = React.useCallback(
+    (rawUrl: string) => {
+      setError(null);
+      let url = rawUrl.trim();
+      if (!url) return;
+
+      // Normalize: allow missing scheme (adds https://).
+      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+
+      let parsed: URL;
+      try {
+        parsed = new URL(url);
+      } catch {
+        setError(`${dict.studio.upload.badUrl}: ${rawUrl}`);
+        return;
+      }
+
+      if (!/^https?:$/.test(parsed.protocol)) {
+        setError(`${dict.studio.upload.badUrl}: ${rawUrl}`);
+        return;
+      }
+
+      // Pages (YouTube etc.) need a backend — surface a clear message instead
+      // of silently failing in the waveform player.
+      if (isPageUrl(parsed.href)) {
+        setError(dict.studio.upload.pageNotSupported);
+        return;
+      }
+
+      if (!looksLikeAudioFile(parsed.href)) {
+        setError(dict.studio.upload.notAudioWarning);
+      }
+
+      setTrack({
+        name: urlToName(parsed.href),
+        kind: "url",
+        src: parsed.href,
+      });
+      setNotes([]);
+      setStage("uploaded");
+      setTempo(DEFAULT_TEMPO);
+    },
+    [dict],
+  );
 
   const handleSample = React.useCallback(() => {
     setError(null);
@@ -166,36 +228,17 @@ export default function StudioPage() {
     const startedAt = Date.now();
 
     try {
-      // Phase 1 always generated mock notes. Phase 2 uses the real model;
-      // the sample (demo) track still gets a rich mock result.
-      const useMock = track.kind === "sample";
-
-      const [res] = await Promise.all([
-        useMock
-          ? Promise.resolve(null)
-          : transcribeToNotes(track.src, (p) => {
-              if (id === seq.current) {
-                setProgress({ progress: p.fraction, stageKey: p.stage });
-              }
-            }),
-        delay(PROCESSING_MIN_MS),
-      ]);
+      // Phase 2: ALWAYS run the real model — including the bundled sample,
+      // which is a clean synthesized melody that Basic Pitch transcribes well.
+      const res = await transcribeToNotes(track.src, (p) => {
+        if (id === seq.current) {
+          setProgress({ progress: p.fraction, stageKey: p.stage });
+        }
+      });
 
       const elapsed = Date.now() - startedAt;
-
-      let finalNotes: NoteData[];
-      let finalTempo: number;
-
-      if (useMock) {
-        finalNotes = generateMockNotes(hashString(track.name), 32, DEFAULT_TEMPO);
-        finalTempo = DEFAULT_TEMPO;
-      } else if (res) {
-        finalNotes = res.notes;
-        finalTempo = res.tempo;
-      } else {
-        finalNotes = [];
-        finalTempo = DEFAULT_TEMPO;
-      }
+      const finalNotes = res.notes;
+      const finalTempo = res.tempo === undefined ? DEFAULT_TEMPO : res.tempo;
 
       if (id !== seq.current) return;
 
@@ -213,9 +256,7 @@ export default function StudioPage() {
     } catch (e) {
       if (id !== seq.current) return;
       setStage("uploaded");
-      setError(
-        e instanceof Error ? e.message : String(e),
-      );
+      setError(e instanceof Error ? e.message : String(e));
     }
   }, [track, stage]);
 
