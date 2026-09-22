@@ -26,15 +26,29 @@ type Props = {
   /** Called once audio metadata loads (duration). */
   onReady?: (duration: number) => void;
   onError?: (message: string) => void;
+  /** Called continuously with the current playback time (seconds). */
+  onTimeUpdate?: (time: number) => void;
 };
 
-export function WaveformPlayer({
-  src,
-  trackName,
-  disabled = false,
-  onReady,
-  onError,
-}: Props) {
+export type WaveformPlayerHandle = {
+  seek: (seconds: number) => void;
+  getDuration: () => number;
+};
+
+export const WaveformPlayer = React.forwardRef<
+  WaveformPlayerHandle,
+  Props
+>(function WaveformPlayer(
+  {
+    src,
+    trackName,
+    disabled = false,
+    onReady,
+    onError,
+    onTimeUpdate,
+  }: Props,
+  ref,
+) {
   const { dict } = useLanguage();
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const wsRef = React.useRef<WaveSurfer | null>(null);
@@ -73,8 +87,14 @@ export function WaveformPlayer({
       setReady(true);
       onReady?.(ws.getDuration());
     });
-    ws.on("audioprocess", (t: number) => setCurrent(t));
-    ws.on("timeupdate", (t: number) => setCurrent(t));
+    ws.on("audioprocess", (t: number) => {
+      setCurrent(t);
+      onTimeUpdate?.(t);
+    });
+    ws.on("timeupdate", (t: number) => {
+      setCurrent(t);
+      onTimeUpdate?.(t);
+    });
     ws.on("play", () => setPlaying(true));
     ws.on("pause", () => setPlaying(false));
     ws.on("finish", () => setPlaying(false));
@@ -120,6 +140,18 @@ export function WaveformPlayer({
   }, []);
 
   const toggleMute = React.useCallback(() => setMuted((m) => !m), []);
+
+  // Expose an imperative handle so parents can seek from the piano roll.
+  React.useImperativeHandle(ref, () => ({
+    seek: (seconds: number) => {
+      const ws = wsRef.current;
+      if (ws) {
+        const dur = ws.getDuration() || 0;
+        ws.setTime(Math.min(Math.max(0, seconds), dur));
+      }
+    },
+    getDuration: () => wsRef.current?.getDuration() ?? 0,
+  }));
 
   const fmt = formatTime;
 
@@ -219,6 +251,6 @@ export function WaveformPlayer({
       </div>
     </div>
   );
-}
+});
 
 export { SPEEDS };

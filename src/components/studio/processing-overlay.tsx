@@ -7,22 +7,41 @@ import { AudioWaveform, Check } from "lucide-react";
 import { type ProcessStage } from "@/lib/studio/types";
 import { useLanguage } from "@/components/language-provider";
 import { MotionDiv } from "@/components/ui/motion";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
-const STEP_DURATION = 850; // ms per step
+const STAGE_STEP_DURATION = 850; // ms per label step (threshold fallback)
+
+export type ProcessingInfo = {
+  /** 0..1 overall progress from the transcription engine. */
+  progress: number;
+  /** Internal stage key ("decode" | "preprocess" | "model" | "convert" | "tempo" | "done"). */
+  stageKey: string;
+};
 
 type Props = {
   stage: ProcessStage;
+  info: ProcessingInfo;
 };
 
+const STAGE_KEYS = ["decode", "preprocess", "model", "convert", "tempo"];
+
+function labelIndexFor(stageKey: string, steps: string[]): number {
+  const idx = STAGE_KEYS.indexOf(stageKey);
+  return Math.max(0, Math.min(idx, steps.length - 1));
+}
+
 /**
- * Full-screen AI "transcribing" overlay.
- * Phase 1 simulates the pipeline (no real Basic Pitch yet) — the steps advance
- * on a timer and the studio flips to the result once its own timer completes.
+ * Full-screen AI "transcribing" overlay. In Phase 2 it shows real progress
+ * from the Basic Pitch pipeline; the checkmark steps advance with progress
+ * (with a timer fallback while the model's first frame is loading).
  */
-export function ProcessingOverlay({ stage }: Props) {
+export function ProcessingOverlay({ stage, info }: Props) {
   const { dict } = useLanguage();
   const active = stage === "processing";
+  const steps = dict.studio.processing.steps;
+
+  const pct = Math.min(100, Math.max(4, Math.round(info.progress * 100)));
 
   return (
     <AnimatePresence>
@@ -55,14 +74,16 @@ export function ProcessingOverlay({ stage }: Props) {
             <h2 className="mt-6 text-lg font-semibold">
               {dict.studio.processing.title}
             </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {dict.studio.processing.eta}
-            </p>
 
-            <StepList
-              steps={dict.studio.processing.steps}
-              doneLabel={dict.studio.processing.done}
-            />
+            {/* Progress bar */}
+            <div className="mt-4">
+              <Progress value={pct} variant="gradient" className="h-2.5" />
+              <p className="mt-2 font-mono text-xs text-muted-foreground">
+                {pct}%
+              </p>
+            </div>
+
+            <StepsPanel steps={steps} info={info} />
           </MotionDiv>
         </MotionDiv>
       )}
@@ -70,70 +91,71 @@ export function ProcessingOverlay({ stage }: Props) {
   );
 }
 
-function StepList({
+function StepsPanel({
   steps,
-  doneLabel,
+  info,
 }: {
   steps: string[];
-  doneLabel: string;
+  info: ProcessingInfo;
 }) {
-  const [step, setStep] = React.useState(0);
+  const [timerStep, setTimerStep] = React.useState(0);
 
   React.useEffect(() => {
     const id = window.setInterval(() => {
-      setStep((s) => Math.min(s + 1, steps.length - 1));
-    }, STEP_DURATION);
+      setTimerStep((s) => Math.min(s + 1, steps.length - 2));
+    }, STAGE_STEP_DURATION);
     return () => window.clearInterval(id);
   }, [steps.length]);
 
+  // Which step is "current" — driven by the real progress when available.
+  const labelIdx = labelIndexFor(info.stageKey, steps);
+  const progressStep = Math.max(labelIdx, timerStep);
+
   return (
-    <ul className="mt-6 space-y-2.5 text-left">
+    <ul className="mt-5 space-y-2.5 text-left">
       {steps.map((label, i) => {
-        const done = i < step;
-        const isCurrent = i === step;
+        const done = i < progressStep;
+        const isCurrent = i === progressStep;
         return (
-          <li
-            key={label}
-            className={cn(
-              "flex items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-sm transition-colors",
-              isCurrent && "border-violet-500/30 bg-violet-500/10",
-            )}
-          >
-            <span
-              className={cn(
-                "grid size-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold",
-                done &&
-                  "border-emerald-400/40 bg-emerald-400/15 text-emerald-300",
-                isCurrent && "border-cyan-400/50 bg-cyan-400/15 text-cyan-300",
-                !done && !isCurrent && "border-border text-muted-foreground/50",
-              )}
-            >
-              {done ? (
-                <Check className="size-3.5" />
-              ) : isCurrent ? (
-                <span className="size-2 animate-pulse rounded-full bg-cyan-300" />
-              ) : (
-                i + 1
-              )}
-            </span>
-            <span
-              className={cn(
-                "flex-1",
-                isCurrent
-                  ? "font-medium text-foreground"
-                  : done
-                    ? "text-muted-foreground"
-                    : "text-muted-foreground/50",
-              )}
-            >
-              {label}
-            </span>
-            {done && i === steps.length - 1 && (
-              <span className="text-xs font-medium text-emerald-300">
-                {doneLabel}
-              </span>
-            )}
-          </li>
+                  <li
+                    key={label}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-sm transition-colors",
+                      isCurrent && "border-violet-500/30 bg-violet-500/10",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "grid size-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold",
+                        done &&
+                          "border-emerald-400/40 bg-emerald-400/15 text-emerald-300",
+                        isCurrent &&
+                          "border-cyan-400/50 bg-cyan-400/15 text-cyan-300",
+                        !done && !isCurrent &&
+                          "border-border text-muted-foreground/50",
+                      )}
+                    >
+                      {done ? (
+                        <Check className="size-3.5" />
+                      ) : isCurrent ? (
+                        <span className="size-2 animate-pulse rounded-full bg-cyan-300" />
+                      ) : (
+                        i + 1
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "flex-1",
+                        isCurrent
+                          ? "font-medium text-foreground"
+                          : done
+                            ? "text-muted-foreground"
+                            : "text-muted-foreground/50",
+                      )}
+                    >
+                      {label}
+                    </span>
+                  </li>
         );
       })}
     </ul>

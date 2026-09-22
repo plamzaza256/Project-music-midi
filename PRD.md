@@ -65,8 +65,8 @@ Default theme is dark. Language toggle (TH/EN) is always visible in the navbar/t
 | Phase | Scope |
 | --- | --- |
 | **Phase 1** | UI & Mock Studio — scaffold, theme, i18n, landing, studio layout, upload, waveform + speed, mock piano roll, view switcher, loading animation |
-| Phase 2 | Basic Pitch integration — real audio→MIDI transcription in browser |
-| Phase 3 | Sheet music rendering, piano sound (Tone.js) sync, export (MIDI/PDF) |
+| ✅ **Phase 2** | Basic Pitch integration — real audio→MIDI transcription in browser (model served locally, `.mid` export) |
+| Phase 3 | Sheet music rendering, piano sound (Tone.js) sync, export PDF |
 | Phase 4 | Link input, polish, performance, deployment |
 
 ## 7. Non-functional requirements

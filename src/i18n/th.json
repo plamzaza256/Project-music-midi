@@ -110,7 +110,11 @@
       "back": "กลับหน้าหลัก",
       "badgeDraft": "ร่าง",
       "transcribe": "แปลงเป็นโน้ต",
-      "export": "ส่งออก"
+      "export": "ส่งออก",
+      "exportJson": "ดาวน์โหลด JSON",
+      "exportMidi": "ดาวน์โหลด MIDI",
+      "notesUnit": "โน้ต",
+      "processing": "กำลังประมวลผล…"
     },
     "upload": {
       "idleTitle": "วางไฟล์เพลงของคุณที่นี่",
@@ -148,7 +152,9 @@
     },
     "pianoRoll": {
       "title": "Piano Roll — ตัวอย่าง",
-      "empty": "ยังไม่มีโน้ต — อัปโหลดเพลงแล้วกด “แปลงเป็นโน้ต”"
+      "empty": "ยังไม่มีโน้ต — อัปโหลดเพลงแล้วกด “แปลงเป็นโน้ต”",
+      "tempo": "จังหวะ",
+      "notes": "โน้ต"
     },
     "processing": {
       "steps": [

@@ -35,16 +35,20 @@ export function buildRows(minMidi: number, maxMidi: number): Row[] {
  * Compute each note's pixel position for the SVG scroll view.
  * - beatWidth (px per beat) is fixed; the container scrolls horizontally.
  * - topMargin compensates for the row label gutter.
+ * - notes are given in seconds; `tempo` converts them to beats.
  */
 export function layoutNotes(
   notes: NoteData[],
   rows: Row[],
   beatWidth: number,
+  tempo: number,
   topMargin = 20,
 ) {
   const overscan = 16;
+  const secPerBeat = 60 / tempo;
   const totalBeats =
-    notes.reduce((m, n) => Math.max(m, n.start + n.duration), 0) + 4;
+    notes.reduce((m, n) => Math.max(m, (n.start + n.duration) / secPerBeat), 0) +
+    4;
   const width = totalBeats * beatWidth + overscan;
   const minMidi = rows[rows.length - 1]!.midi;
 
@@ -53,9 +57,9 @@ export function layoutNotes(
     const rowIdx = Math.max(0, Math.min(rows.length - 1, n.midi - minMidi));
     const top = rowIdx * NOTE_HEIGHT;
     return {
-      x: n.start * beatWidth,
+      x: (n.start / secPerBeat) * beatWidth,
       y: topMargin + top + 1,
-      w: Math.max(n.duration * beatWidth - 2.5, 4),
+      w: Math.max((n.duration / secPerBeat) * beatWidth - 2.5, 4),
       h: NOTE_HEIGHT - 2,
       fill: n.accent ? rgb : shade(rgb, 0.82),
       below: shade(rgb, 0.38),

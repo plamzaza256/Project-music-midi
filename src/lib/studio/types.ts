@@ -3,9 +3,9 @@ export type { Locale } from "@/i18n";
 export type NoteData = {
   /** MIDI note number (C4 = 60). */
   midi: number;
-  /** Start time in beats (1 beat ≈ quarter note). */
+  /** Start time in seconds. */
   start: number;
-  /** Duration in beats. */
+  /** Duration in seconds. */
   duration: number;
   /** Velocity 0..1 for color intensity. */
   velocity: number;
@@ -18,6 +18,9 @@ export type ProcessStage =
   | "uploaded"
   | "processing"
   | "done";
+
+/** Fallback BPM when nothing better is known (mock / demo). */
+export const DEFAULT_TEMPO = 120;
 
 /**
  * Mock = MainTheme with a touch of Nuvole Bianche

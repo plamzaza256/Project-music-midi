@@ -6,7 +6,7 @@
 
 Semi-dark studio UI (`#111118`) with violet/cyan accents · TH/EN bilingual.
 
-## ✨ Features (Phase 1 — UI & Mock Studio)
+## ✨ Features (Phase 1 + 2)
 
 - **Next.js 16** (App Router) + **Tailwind CSS v4** + **Shadcn UI** (New York style)
 - **Theme & Language** — สลับไทย/อังกฤษได้ทันที (จำค่าไว้ใน localStorage)
@@ -17,6 +17,8 @@ Semi-dark studio UI (`#111118`) with violet/cyan accents · TH/EN bilingual.
 - **Piano Roll** (mock data) — แสดงโน้ตบนคีย์เปียโน พร้อม beat grid และแถบคีย์
 - **View Switcher** — สลับ Piano Roll ⇆ Sheet Music placeholder
 - **AI Processing Animation** — overlay จำลองขั้นตอนการแกะเพลง
+- **Real transcription (Phase 2)** — [Basic Pitch](https://github.com/spotify/basic-pitch-ts) แปลงเสียง → MIDI ในเบราว์เซอร์ (mono 22050Hz, TensorFlow.js)
+- **MIDI export** — ดาวน์โหลดผลลัพธ์เป็นไฟล์ `.mid` + JSON
 
 ## 🚀 Getting started
 
@@ -65,14 +67,18 @@ src/
 | Phase | Scope | Status |
 | --- | --- | --- |
 | **1** | UI & Mock Studio | ✅ done |
-| 2 | Basic Pitch audio → MIDI | backlog |
-| 3 | Sheet music + Tone.js sync + export | backlog |
+| **2** | Basic Pitch audio → MIDI + tempo + `.mid` export | ✅ done |
+| 3 | Sheet music + Tone.js sync + PDF export | backlog |
 
 See [`PRD.md`](./PRD.md) and [`TASKS.md`](./TASKS.md) for full details.
 
 ---
 
-### Note on the demo track
+### Note on the model & demo track
+
+The Basic Pitch ONNX model (`public/model/basic-pitch/`) is copied from
+`@spotify/basic-pitch` (Apache-2.0) so transcription runs fully client-side —
+the model loads from the app's own origin, no external CDN.
 
 The "Try sample audio" button streams a short Wikimedia Commons clip
 (**MainTheme with a touch of Nuvole Bianche** by ppo). The file is not bundled

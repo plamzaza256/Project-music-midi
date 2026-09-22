@@ -14,14 +14,15 @@ Status legend: `[ ]` todo · `[x]` done
 - [x] View Switcher (Piano Roll / Sheet Music Placeholder)
 - [x] AI Processing Loading Animation
 
-## PHASE 2 — Transcription Engine (backlog)
+## PHASE 2 — Transcription Engine
 
-- [ ] Integrate Basic Pitch (client-side) for audio → MIDI
-- [ ] Note quantization & tempo estimation
-- [ ] Wire real transcription into Piano Roll
+- [x] Integrate Basic Pitch (client-side) for audio → MIDI
+- [x] Note quantization & tempo estimation
+- [x] Wire real transcription into Piano Roll
 
-## PHASE 3 — Notation & Audio (backlog)
+## PHASE 3 — Notation & Audio
 
 - [ ] Sheet Music rendering from MIDI
 - [ ] Tone.js piano playback synchronized with original
-- [ ] Export MIDI / PDF
+- [x] Export MIDI (Phase 2 bonus — real `.mid` export shipped early)
+- [ ] Export PDF

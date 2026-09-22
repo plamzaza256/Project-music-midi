@@ -110,7 +110,11 @@
       "back": "Back home",
       "badgeDraft": "Draft",
       "transcribe": "Transcribe",
-      "export": "Export"
+      "export": "Export",
+      "exportJson": "Download JSON",
+      "exportMidi": "Download MIDI",
+      "notesUnit": "notes",
+      "processing": "Processing…"
     },
     "upload": {
       "idleTitle": "Drop your song here",
@@ -148,7 +152,9 @@
     },
     "pianoRoll": {
       "title": "Piano Roll — Preview",
-      "empty": "No notes yet — upload a song and hit “Transcribe”."
+      "empty": "No notes yet — upload a song and hit “Transcribe”.",
+      "tempo": "Tempo",
+      "notes": "notes"
     },
     "processing": {
       "steps": [

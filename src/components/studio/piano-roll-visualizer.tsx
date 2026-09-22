@@ -8,19 +8,30 @@ import {
   layoutNotes,
   type Row,
 } from "@/lib/studio/pianoroll-geometry";
-import { isBlackKey } from "@/lib/studio/notes";
+import { isBlackKey, midiToName } from "@/lib/studio/notes";
 import type { NoteData } from "@/lib/studio/types";
 import { useLanguage } from "@/components/language-provider";
+import { Badge } from "@/components/ui/badge";
 
 const BEAT_WIDTH = 28; // px per beat (fixed; container scrolls horizontally)
 
 type Props = {
   notes: NoteData[];
+  tempo: number;
+  onSeek?: (seconds: number) => void;
+  /** Optional real-time playhead position in seconds. */
+  playheadTime?: number | null;
 };
 
-export function PianoRollVisualizer({ notes }: Props) {
+export function PianoRollVisualizer({
+  notes,
+  tempo,
+  onSeek,
+  playheadTime = null,
+}: Props) {
   const { dict } = useLanguage();
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const secPerBeat = tempo > 0 ? 60 / tempo : 0.5;
 
   const { minMidi, maxMidi, ranges } = useMemo(() => {
     if (notes.length === 0) {
@@ -58,8 +69,8 @@ export function PianoRollVisualizer({ notes }: Props) {
   );
 
   const { rects, width, totalBeats } = useMemo(
-    () => layoutNotes(notes, rows, BEAT_WIDTH),
-    [notes, rows],
+    () => layoutNotes(notes, rows, BEAT_WIDTH, tempo),
+    [notes, rows, tempo],
   );
 
   const topMargin = 20;
@@ -69,6 +80,23 @@ export function PianoRollVisualizer({ notes }: Props) {
   // Beat markers every 4 beats.
   const beatMarkers: number[] = [];
   for (let b = 0; b <= totalBeats; b += 4) beatMarkers.push(b);
+
+  // Playhead x position (either real-time or static demo position).
+  const playheadX = useMemo(() => {
+    if (playheadTime !== null && playheadTime !== undefined) {
+      return (playheadTime / secPerBeat) * BEAT_WIDTH;
+    }
+    return width * 0.18;
+  }, [playheadTime, secPerBeat, width]);
+
+  const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!onSeek) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left - 26; // 26 = label gutter offset
+    if (x < 0) return;
+    const seconds = (x / BEAT_WIDTH) * secPerBeat;
+    onSeek(Math.max(0, seconds));
+  };
 
   if (notes.length === 0) {
     return (
@@ -83,6 +111,19 @@ export function PianoRollVisualizer({ notes }: Props) {
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-border bg-[#0e0e15]">
+      {/* Sticky header: title + tempo */}
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-card/60 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{dict.studio.pianoRoll.title}</span>
+          <Badge variant="cyan" className="font-mono">
+            {notes.length} {dict.studio.pianoRoll.notes}
+          </Badge>
+        </div>
+        <Badge variant="violet" className="font-mono">
+          {Math.round(tempo)} BPM
+        </Badge>
+      </div>
+
       <div
         ref={scrollRef}
         className="pianoroll-scroll overflow-x-auto overflow-y-hidden"
@@ -93,8 +134,9 @@ export function PianoRollVisualizer({ notes }: Props) {
         <svg
           width={width}
           height={height}
-          className="block"
+          className="block cursor-crosshair"
           style={{ minWidth: width }}
+          onClick={handleClick}
         >
           {/* Beat grid */}
           {beatMarkers.map((b) => (
@@ -129,6 +171,7 @@ export function PianoRollVisualizer({ notes }: Props) {
           {rows.map((row, i) => {
             const y = headerH + topMargin + i * 9;
             const black = row.isBlack;
+            const isC = row.midi % 12 === 0;
             return (
               <g key={row.midi}>
                 <line
@@ -143,10 +186,10 @@ export function PianoRollVisualizer({ notes }: Props) {
                   x={4}
                   y={y + 7.5}
                   fontSize={8.5}
-                  fill="rgba(148,163,184,0.75)"
+                  fill={isC ? "rgba(167,139,250,0.9)" : "rgba(148,163,184,0.55)"}
                   fontFamily="ui-monospace, monospace"
                 >
-                  {row.midi}
+                  {midiToName(row.midi)}
                 </text>
               </g>
             );
@@ -154,51 +197,54 @@ export function PianoRollVisualizer({ notes }: Props) {
 
           {/* Notes */}
           {rects.map((r, i) => (
-            <rect
-              key={i}
-              x={r.x + 26}
-              y={r.y}
-              width={r.w}
-              height={r.h}
-              rx={2}
-              fill={r.fill}
-              stroke={r.below}
-              strokeWidth={0.5}
-            />
+            <g key={i}>
+              <rect
+                x={r.x + 26}
+                y={r.y}
+                width={r.w}
+                height={r.h}
+                rx={2}
+                fill={r.fill}
+                stroke={r.below}
+                strokeWidth={0.5}
+              />
+              {r.accent && (
+                <rect
+                  x={r.x + 26}
+                  y={r.y}
+                  width={Math.min(r.w, 3)}
+                  height={r.h}
+                  rx={1}
+                  fill="#ffffff"
+                  opacity={0.5}
+                />
+              )}
+            </g>
           ))}
 
-          {/* Playhead (static demo position) */}
+          {/* Playhead */}
           <line
-            x1={width * 0.18}
-            x2={width * 0.18}
+            x1={playheadX}
+            x2={playheadX}
             y1={headerH}
             y2={height}
             stroke="rgba(255,255,255,0.7)"
             strokeWidth={1}
           />
-          <circle
-            cx={width * 0.18}
-            cy={headerH + 5}
-            r={3}
-            fill="#ffffff"
-          />
+          <circle cx={playheadX} cy={headerH + 5} r={3} fill="#ffffff" />
         </svg>
       </div>
 
       {/* Bottom keyboard strip */}
       <div className="sticky bottom-0 left-0 z-10 border-t border-border bg-[#0e0e15] px-0.5 py-0.5">
-        <div
-          className="flex"
-          style={{ paddingLeft: 26 }}
-        >
+        <div className="flex" style={{ paddingLeft: 26 }}>
           {rows.map((row) => {
             const black = row.isBlack;
-            const isC =
-              row.midi % 12 === 0;
+            const isC = row.midi % 12 === 0;
             return (
               <div
                 key={row.midi}
-                title={`MIDI ${row.midi}`}
+                title={midiToName(row.midi)}
                 className={
                   "relative h-3.5 flex-1 " +
                   (black
@@ -206,11 +252,7 @@ export function PianoRollVisualizer({ notes }: Props) {
                     : "bg-gradient-to-b from-zinc-200 to-zinc-400 ") +
                   (isC ? "border-l border-violet-400/60 " : "")
                 }
-              >
-                {black && (
-                  <span className="block h-3.5 w-full bg-zinc-900" />
-                )}
-              </div>
+              />
             );
           })}
         </div>

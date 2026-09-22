@@ -39,20 +39,26 @@ function mulberry32(seed: number) {
 }
 
 /**
- * Deterministic mock transcription (Phase 1 stub).
- * `extent` = total beats; the progression spans that range automatically.
+ * Deterministic mock transcription (Phase 1/2 fallback for the demo track).
+ * Produces notes whose `start`/`duration` are in **seconds** at `tempo` BPM.
  */
-export function generateMockNotes(seed = 7, extent = 64): NoteData[] {
+export function generateMockNotes(
+  seed = 7,
+  durationSeconds = 32,
+  tempo = 120,
+): NoteData[] {
   const rnd = mulberry32(seed);
   const chordProgression = [60, 64, 67, 65, 69, 72]; // C, E, G, F, A, C
-  const bars = Math.max(8, Math.floor(extent / 4));
+  const secPerBeat = 60 / tempo;
+  const totalBeats = Math.max(8, durationSeconds / secPerBeat);
+  const bars = Math.max(8, Math.floor(totalBeats / 4));
   const notes: NoteData[] = [];
-  const chordDur = extent / bars / 2;
+  const chordDur = totalBeats / bars / 2;
   const C4 = 48; // lowest row
   const TOP = 96; // C7
 
   let t = 0;
-  while (t < extent - 0.6) {
+  while (t < totalBeats - 0.6) {
     const barIndex = Math.floor(t / 4) % chordProgression.length;
     const root = chordProgression[barIndex]!;
     const options = [root - 12, root, root + 4, root + 7, root + 12];
@@ -63,8 +69,8 @@ export function generateMockNotes(seed = 7, extent = 64): NoteData[] {
     if (rnd() > 0.15) {
       notes.push({
         midi,
-        start: t,
-        duration: Math.max(0.6, 1.2 - ((midi % 2) + 1) * 0.15),
+        start: t * secPerBeat,
+        duration: Math.max(0.3, 0.6 - ((midi % 2) + 1) * 0.075),
         velocity: 0.55 + rnd() * 0.45,
         accent: t % 8 < 0.05,
       });
@@ -73,8 +79,8 @@ export function generateMockNotes(seed = 7, extent = 64): NoteData[] {
     if (t % 4 < 0.05) {
       notes.push({
         midi: lo,
-        start: t,
-        duration: Math.min(chordDur, 2),
+        start: t * secPerBeat,
+        duration: Math.min(chordDur, 2) * secPerBeat,
         velocity: 0.7 + rnd() * 0.3,
         accent: true,
       });
