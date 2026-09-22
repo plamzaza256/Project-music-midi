@@ -116,6 +116,13 @@
       "notesUnit": "notes",
       "processing": "Processing…"
     },
+    "keyDetected": "Key",
+    "keyLabel": "Key",
+    "keyAuto": "Auto detect",
+    "keyChromatic": "Chromatic (no snap)",
+    "keyMajor": "Force Major",
+    "keyMinor": "Force Minor",
+    "ytLoading": "Resolving YouTube audio…",
     "upload": {
       "idleTitle": "Drop your song here",
       "idleHint": "Drag & drop, or click to choose a file",

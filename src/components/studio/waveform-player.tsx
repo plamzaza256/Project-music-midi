@@ -33,6 +33,7 @@ type Props = {
 export type WaveformPlayerHandle = {
   seek: (seconds: number) => void;
   getDuration: () => number;
+  getCurrentTime: () => number;
 };
 
 export const WaveformPlayer = React.forwardRef<
@@ -151,6 +152,7 @@ export const WaveformPlayer = React.forwardRef<
       }
     },
     getDuration: () => wsRef.current?.getDuration() ?? 0,
+    getCurrentTime: () => wsRef.current?.getCurrentTime() ?? 0,
   }));
 
   const fmt = formatTime;

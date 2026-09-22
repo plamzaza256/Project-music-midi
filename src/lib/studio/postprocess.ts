@@ -1,13 +1,21 @@
-import type { NoteData } from "@/lib/studio/types";
+import type { NoteData } from "./types";
+import {
+  detectKey,
+  estimatePitchOffsetCents,
+  quantizeToKey,
+  type KeyMode,
+  type MusicalKey,
+} from "./key-quantize.ts";
 
 /**
  * Post-processing / cleanup for Basic Pitch output.
  *
  * The model emits raw note events that are often noisy: flaky micro-notes,
- * quiet ghost notes, subsonic/supersonic garbage, and jittery timings. This
- * module is the "audio-engineering" layer run BEFORE the result reaches the
- * Piano Roll — it tunes detection thresholds, filters junk, merges duplicates,
- * estimates tempo, and quantizes timings onto a musical grid.
+ * quiet ghost notes, subsonic/supersonic garbage, off-key sharps/flats, and
+ * jittery timings. This module is the "audio-engineering" layer run BEFORE the
+ * result reaches the Piano Roll — it tunes detection thresholds, filters junk,
+ * detects the song key, snaps pitches to that key, estimates tempo, and
+ * quantizes timings onto a musical grid.
  */
 
 /** One raw note produced by Basic Pitch's `noteFramesToTime()`. */
@@ -36,6 +44,16 @@ export type PostProcessOptions = {
   maxMidi: number;
   /** Snap note start/duration to a 16th-note grid. */
   quantize: boolean;
+  /**
+   * Key constraint for snapped pitch output — "auto" detects and snaps to the
+   * detected key, "chromatic" leaves pitches as-is, "major"/"minor" snap to the
+   * best key in that mode.
+   */
+  keyMode: KeyMode;
+  /** Fixed key override (when the user picked one explicitly). */
+  key: MusicalKey | null;
+  /** Whether the A4=440 Hz calibration offset is estimated & applied. */
+  calibrate: boolean;
 };
 
 /** C1 (MIDI 24) and C7 (MIDI 96) — the musically useful piano range. */
@@ -47,6 +65,9 @@ export const DEFAULT_POST_OPTIONS: PostProcessOptions = {
   minMidi: 24,
   maxMidi: 96,
   quantize: true,
+  keyMode: "auto",
+  key: null,
+  calibrate: true,
 };
 
 export function midiToHz(midi: number): number {
@@ -164,16 +185,24 @@ function normalizeVelocity(amplitude: number, minVelocity: number): number {
   return 0.3 + t * 0.7;
 }
 
+export type PostProcessResult = {
+  notes: NoteData[];
+  tempo: number;
+  key: MusicalKey | null;
+  keyConfidence: number;
+  offsetCents: number;
+};
+
 /**
  * Run the full cleanup pipeline over Basic Pitch's raw notes:
- * pitch range → min duration → velocity floor → duplicate merge → tempo →
- * quantization → velocity normalization.
+ * pitch range → min duration → velocity floor → duplicate merge → key detect →
+ * A440 calibration → key snap → tempo → grid quantization → velocity normalize.
  */
 export function postProcessNotes(
   raw: RawDetectedNote[],
   options: PostProcessOptions = DEFAULT_POST_OPTIONS,
   fallbackTempo = 100,
-): { notes: NoteData[]; tempo: number } {
+): PostProcessResult {
   // 1) Pitch range (C1..C7) + duration + velocity gates.
   const filtered = raw.filter((n) => {
     if (n.midi < options.minMidi || n.midi > options.maxMidi) return false;
@@ -188,15 +217,54 @@ export function postProcessNotes(
     (a, b) => a.start - b.start || a.midi - b.midi,
   );
 
-  // 3) Tempo — estimated on cleaned (pre-quantization) timings.
+  // 3) Key detection + A440 calibration.
+  let key: MusicalKey | null = null;
+  let keyConfidence = 0;
+  let offsetCents = 0;
+
+  if (options.keyMode !== "chromatic") {
+    if (options.key) {
+      key = options.key;
+      keyConfidence = 0.95;
+      offsetCents = options.calibrate
+        ? estimatePitchOffsetCents(sorted as NoteData[])
+        : 0;
+    } else {
+      const detection = detectKey(
+        sorted as NoteData[],
+        options.calibrate ? undefined : 0,
+      );
+      key = detection.key;
+      keyConfidence = detection.confidence;
+      offsetCents = options.calibrate ? detection.offsetCents : 0;
+      if (options.keyMode === "major" && key.mode !== "major") {
+        key = { tonic: key.tonic, mode: "major" };
+        keyConfidence *= 0.8;
+      } else if (options.keyMode === "minor" && key.mode !== "minor") {
+        key = { tonic: key.tonic, mode: "minor" };
+        keyConfidence *= 0.8;
+      }
+    }
+  }
+
+  // 4) Snap pitches onto the key (mapping stray #/b to the nearest degree).
+  const keyCleaned: NoteData[] = quantizeToKey(
+    sorted as NoteData[],
+    options.keyMode === "chromatic" ? null : key,
+    offsetCents,
+  );
+
+  // 5) Tempo — estimated on cleaned (pre-quantization) timings.
   const tempo = options.quantize
-    ? estimateTempo(sorted, fallbackTempo)
+    ? estimateTempo(keyCleaned, fallbackTempo)
     : fallbackTempo;
 
-  // 4) Quantize onto the grid.
-  const cleaned = options.quantize ? quantizeNotes(sorted, tempo) : sorted;
+  // 6) Quantize timings onto the grid.
+  const cleaned: NoteData[] = options.quantize
+    ? quantizeNotes(keyCleaned as RawDetectedNote[], tempo)
+    : keyCleaned;
 
-  // 5) Normalize velocity.
+  // 7) Normalize velocity.
   const notes: NoteData[] = cleaned.map((n) => ({
     midi: n.midi,
     start: n.start,
@@ -204,5 +272,5 @@ export function postProcessNotes(
     velocity: normalizeVelocity(n.velocity, options.minVelocity),
   }));
 
-  return { notes, tempo };
+  return { notes, tempo, key, keyConfidence, offsetCents };
 }

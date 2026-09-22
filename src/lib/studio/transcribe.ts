@@ -5,6 +5,7 @@ import {
   DEFAULT_POST_OPTIONS,
   postProcessNotes,
   midiToHz,
+  type PostProcessOptions,
   type RawDetectedNote,
 } from "@/lib/studio/postprocess";
 
@@ -155,13 +156,28 @@ export type TranscriptionProgress = {
   stage: string;
 };
 
+export type TranscriptionResult = {
+  notes: NoteData[];
+  tempo: number;
+  durationSeconds: number;
+  key: ReturnType<typeof postProcessNotes>["key"];
+  keyConfidence: number;
+  offsetCents: number;
+};
+
 /**
  * Run the full transcription pipeline and return studio-ready notes.
  */
 export async function transcribeToNotes(
   src: string,
   onProgress?: (p: TranscriptionProgress) => void,
-): Promise<{ notes: NoteData[]; tempo: number; durationSeconds: number }> {
+  options?: Partial<PostProcessOptions>,
+): Promise<TranscriptionResult> {
+  const opts: PostProcessOptions = {
+    ...DEFAULT_POST_OPTIONS,
+    ...options,
+    key: options?.key ?? DEFAULT_POST_OPTIONS.key,
+  };
   // 1. Decode
   onProgress?.({ fraction: 0, stage: "decode" });
   const buffer = await decodeSource(src);
@@ -172,7 +188,14 @@ export async function transcribeToNotes(
 
   // Short clips need no model pass — return empty result.
   if (buffer.duration < 0.4 || mono.length < SAMPLE_RATE * 0.4) {
-    return { notes: [], tempo: 100, durationSeconds: buffer.duration };
+    return {
+      notes: [],
+      tempo: 100,
+      durationSeconds: buffer.duration,
+      key: null,
+      keyConfidence: 0,
+      offsetCents: 0,
+    };
   }
 
   const { module, instance } = await getBasicPitch();
@@ -226,19 +249,26 @@ export async function transcribeToNotes(
     }
   }
 
-  // 5. Post-process: cleanup junk → estimate tempo → quantize.
+  // 5. Post-process: key detect, calibration, cleanup, tempo, quantize.
   //    Hold the "refining note accuracy" stage for a visible moment while
   //    the fast post-processing math runs.
   onProgress?.({ fraction: 0.8, stage: "refine" });
   const [result] = await Promise.all([
-    Promise.resolve(postProcessNotes(rawNotes, DEFAULT_POST_OPTIONS)),
+    Promise.resolve(postProcessNotes(rawNotes, opts)),
     new Promise<void>((r) => setTimeout(r, 800)),
   ]);
 
   const durationSeconds = buffer.duration;
 
   onProgress?.({ fraction: 1, stage: "done" });
-  return { notes: result.notes, tempo: result.tempo, durationSeconds };
+  return {
+    notes: result.notes,
+    tempo: result.tempo,
+    durationSeconds,
+    key: result.key,
+    keyConfidence: result.keyConfidence,
+    offsetCents: result.offsetCents,
+  };
 }
 
 /* ------------------------------------------------------------------ */

@@ -116,6 +116,13 @@
       "notesUnit": "โน้ต",
       "processing": "กำลังประมวลผล…"
     },
+    "keyDetected": "คีย์ที่ตรวจพบ",
+    "keyLabel": "คีย์เพลง",
+    "keyAuto": "ตรวจจับอัตโนมัติ",
+    "keyChromatic": "โครมาติก (ไม่กรอง)",
+    "keyMajor": "บังคับ Major",
+    "keyMinor": "บังคับ Minor",
+    "ytLoading": "กำลังดึงเสียงจาก YouTube…",
     "upload": {
       "idleTitle": "วางไฟล์เพลงของคุณที่นี่",
       "idleHint": "ลากและวาง หรือคลิกเพื่อเลือกไฟล์",

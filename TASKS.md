@@ -20,6 +20,9 @@ Status legend: `[ ]` todo · `[x]` done
 - [x] Note quantization & tempo estimation
 - [x] Wire real transcription into Piano Roll
 - [x] Post-processing: onset/frame thresholds, MIDI cleanup (min duration, velocity, pitch range), grid quantization, "refining accuracy" stage
+- [x] Key & Pitch Quantization: key detection + A440 calibration + key snap (auto / force Major / Minor dropdown)
+- [x] Playback sync: rAF-driven playhead bound to WaveSurfer currentTime (seconds, 1:1)
+- [x] YouTube proxy: `/api/yt-extract` server-side audio stream (Range-aware, CORS-safe)
 
 ## PHASE 3 — Notation & Audio
 

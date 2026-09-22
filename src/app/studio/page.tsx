@@ -16,6 +16,12 @@ import { useLanguage } from "@/components/language-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  keyLabel,
+  ALL_KEYS,
+  type KeyMode,
+  type MusicalKey,
+} from "@/lib/studio/key-quantize";
 import { UploadZone, validateFile, type TrackKind } from "@/components/studio/upload-zone";
 import {
   WaveformPlayer,
@@ -68,8 +74,20 @@ function looksLikeAudioFile(url: string): boolean {
   }
 }
 
-function isPageUrl(url: string): boolean {
-  return /(youtube\.com|youtu\.be|soundcloud\.com|spotify\.com|facebook\.com|instagram\.com|tiktok\.com)/i.test(
+function isYouTubeUrl(url: string): boolean {
+  return /(^|\.)youtube\.com$|(^|\.)youtube-nocookie\.com$|^youtu\.be$/i.test(
+    (() => {
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return url;
+      }
+    })(),
+  );
+}
+
+function isUnsupportedPageUrl(url: string): boolean {
+  return /(soundcloud\.com|spotify\.com|facebook\.com|instagram\.com|tiktok\.com)/i.test(
     url,
   );
 }
@@ -115,10 +133,34 @@ export default function StudioPage() {
     stageKey: "idle",
   });
   const [playheadTime, setPlayheadTime] = React.useState(0);
+  const [detectedKey, setDetectedKey] = React.useState<MusicalKey | null>(null);
+  const [keyMode, setKeyMode] = React.useState<KeyMode>("auto");
+  const [selectedKey, setSelectedKey] = React.useState<MusicalKey | null>(null);
 
   const playerRef = React.useRef<WaveformPlayerHandle | null>(null);
   const resultRef = React.useRef<HTMLDivElement | null>(null);
   const seq = React.useRef(0);
+  const rafRef = React.useRef<number | null>(null);
+
+  // ---- requestAnimationFrame: read WaveSurfer currentTime directly -------
+  // (Solves playhead sync: rAF reads the audio clock every frame instead of
+  // relying on the ~4 Hz React state from WaveSurfer's 'timeupdate' event.)
+  React.useEffect(() => {
+    let raf = 0;
+    const loop = () => {
+      const wsTime = playerRef.current?.getCurrentTime() ?? 0;
+      setPlayheadTime((prev) =>
+        Math.abs(prev - wsTime) > 0.001 ? wsTime : prev,
+      );
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    rafRef.current = raf;
+    return () => {
+      cancelAnimationFrame(raf);
+      rafRef.current = null;
+    };
+  }, []);
 
   // Clear any pending transcribe timer on unmount.
   React.useEffect(() => {
@@ -137,6 +179,7 @@ export default function StudioPage() {
     setError(null);
     setProgress({ progress: 0, stageKey: "idle" });
     setPlayheadTime(0);
+    setDetectedKey(null);
   }, [track]);
 
   // ---- input handlers ---------------------------------------------------
@@ -186,9 +229,21 @@ export default function StudioPage() {
         return;
       }
 
-      // Pages (YouTube etc.) need a backend — surface a clear message instead
-      // of silently failing in the waveform player.
-      if (isPageUrl(parsed.href)) {
+      // YouTube → route through our own server proxy (bypasses CORS).
+      if (isYouTubeUrl(parsed.href)) {
+        setTrack({
+          name: urlToName(parsed.href),
+          kind: "url",
+          src: `/api/yt-extract?url=${encodeURIComponent(parsed.href)}`,
+        });
+        setNotes([]);
+        setStage("uploaded");
+        setTempo(DEFAULT_TEMPO);
+        return;
+      }
+
+      // Unsupported page platforms need a backend we don't have yet.
+      if (isUnsupportedPageUrl(parsed.href)) {
         setError(dict.studio.upload.pageNotSupported);
         return;
       }
@@ -230,11 +285,19 @@ export default function StudioPage() {
     try {
       // Phase 2: ALWAYS run the real model — including the bundled sample,
       // which is a clean synthesized melody that Basic Pitch transcribes well.
-      const res = await transcribeToNotes(track.src, (p) => {
-        if (id === seq.current) {
-          setProgress({ progress: p.fraction, stageKey: p.stage });
-        }
-      });
+      const keyOverride =
+        keyMode === "major" || keyMode === "minor"
+          ? selectedKey
+          : null;
+      const res = await transcribeToNotes(
+        track.src,
+        (p) => {
+          if (id === seq.current) {
+            setProgress({ progress: p.fraction, stageKey: p.stage });
+          }
+        },
+        { keyMode, key: keyOverride },
+      );
 
       const elapsed = Date.now() - startedAt;
       const finalNotes = res.notes;
@@ -246,6 +309,7 @@ export default function StudioPage() {
       setProgress({ progress: 1, stageKey: "done" });
       setNotes(finalNotes);
       setTempo(finalTempo);
+      setDetectedKey(res.key);
       setStage("done");
 
       // Small buffer so the overlay dips to 100% before it closes.
@@ -258,7 +322,7 @@ export default function StudioPage() {
       setStage("uploaded");
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [track, stage]);
+  }, [track, stage, keyMode, selectedKey]);
 
   // ---- export handlers --------------------------------------------------
   const handleExportJson = React.useCallback(() => {
@@ -340,12 +404,76 @@ export default function StudioPage() {
                     : dict.studio.header.badgeDraft}
               </Badge>
             </div>
-            <p className="mt-1 pl-9 text-sm text-muted-foreground">
-              {dict.studio.subtitle}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 pl-9">
+              <p className="text-sm text-muted-foreground">
+                {dict.studio.subtitle}
+              </p>
+              {stage === "done" && detectedKey && (
+                <Badge variant="violet">
+                  {dict.studio.keyDetected}:{" "}
+                  {keyLabel(detectedKey)}
+                </Badge>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Key signature quantization selector */}
+            <div className="flex items-center gap-1.5">
+              <label
+                htmlFor="key-select"
+                className="text-xs text-muted-foreground"
+              >
+                {dict.studio.keyLabel}:
+              </label>
+              <select
+                id="key-select"
+                value={keyMode}
+                onChange={(e) => {
+                  const v = e.target.value as KeyMode;
+                  setKeyMode(v);
+                  if (v === "major" || v === "minor") {
+                    setSelectedKey(
+                      (prev) =>
+                        prev ??
+                        (v === "major"
+                          ? { tonic: 0, mode: "major" }
+                          : { tonic: 9, mode: "minor" }),
+                    );
+                  }
+                }}
+                className="h-8 rounded-md border border-border bg-card px-2 text-xs outline-none focus:border-violet-500/60"
+              >
+                <option value="auto">{dict.studio.keyAuto}</option>
+                <option value="chromatic">
+                  {dict.studio.keyChromatic}
+                </option>
+                <option value="major">{dict.studio.keyMajor}</option>
+                <option value="minor">{dict.studio.keyMinor}</option>
+              </select>
+            </div>
+
+            {(keyMode === "major" || keyMode === "minor") && (
+              <select
+                aria-label={dict.studio.keyLabel}
+                value={selectedKey ? `${selectedKey.tonic}|${selectedKey.mode}` : ""}
+                onChange={(e) => {
+                  const [t, m] = e.target.value.split("|");
+                  setSelectedKey({
+                    tonic: Number(t),
+                    mode: m as "major" | "minor",
+                  });
+                }}
+                className="h-8 rounded-md border border-border bg-card px-2 text-xs outline-none focus:border-violet-500/60"
+              >
+                {ALL_KEYS.filter((k) => k.mode === keyMode).map((k) => (
+                  <option key={`${k.tonic}-${k.mode}`} value={`${k.tonic}|${k.mode}`}>
+                    {keyLabel(k)}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <Button
               onClick={startTranscribing}
               disabled={!hasTrack || isProcessing}

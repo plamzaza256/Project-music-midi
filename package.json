@@ -10,6 +10,7 @@
     "test:postprocess": "node --experimental-strip-types scripts/test-postprocess.mjs"
   },
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "@radix-ui/react-progress": "^1.1.16",
     "@radix-ui/react-separator": "^1.1.15",
     "@radix-ui/react-slider": "^1.4.7",
