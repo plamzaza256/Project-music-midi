@@ -19,6 +19,7 @@ Status legend: `[ ]` todo · `[x]` done
 - [x] Integrate Basic Pitch (client-side) for audio → MIDI
 - [x] Note quantization & tempo estimation
 - [x] Wire real transcription into Piano Roll
+- [x] Post-processing: onset/frame thresholds, MIDI cleanup (min duration, velocity, pitch range), grid quantization, "refining accuracy" stage
 
 ## PHASE 3 — Notation & Audio
 

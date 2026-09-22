@@ -1,6 +1,12 @@
 "use client";
 
 import type { NoteData } from "@/lib/studio/types";
+import {
+  DEFAULT_POST_OPTIONS,
+  postProcessNotes,
+  midiToHz,
+  type RawDetectedNote,
+} from "@/lib/studio/postprocess";
 
 /**
  * Client-side audio → MIDI transcription powered by Basic Pitch
@@ -149,43 +155,6 @@ export type TranscriptionProgress = {
   stage: string;
 };
 
-/** Compute the sample index where the last non-negligible energy occurs. */
-function computeEndSeconds(samples: Float32Array): number {
-  const block = Math.floor(samples.length * 0.001); // avg over ~0.1%
-  const bin = block === 0 ? 1 : block;
-  let lastSignificant = 0;
-  for (let i = 0; i < samples.length; i += bin) {
-    let sum = 0;
-    const end = Math.min(i + bin, samples.length);
-    for (let j = i; j < end; j++) {
-      const v = samples[j]!;
-      sum += v * v;
-    }
-    const rms = Math.sqrt(sum / (end - i));
-    if (rms > 1e-3) lastSignificant = end;
-  }
-  return lastSignificant / SAMPLE_RATE;
-}
-
-/** Naive but robust tempo estimation from median inter-onset interval. */
-function inferTempo(notes: NoteData[]): { tempo: number } {
-  if (notes.length < 4) return { tempo: 120 };
-
-  const starts = notes.map((n) => n.start).sort((a, b) => a - b);
-  const intervals: number[] = [];
-  for (let i = 1; i < starts.length; i++) {
-    const dt = starts[i]! - starts[i - 1]!;
-    if (dt > 0.08 && dt < 2.0) intervals.push(dt);
-  }
-
-  if (intervals.length < 3) return { tempo: 120 };
-  intervals.sort((a, b) => a - b);
-  const median = intervals[Math.floor(intervals.length / 2)]!;
-  if (median <= 0) return { tempo: 120 };
-  const guess = 60 / median;
-  return { tempo: Math.min(180, Math.max(60, Math.round(guess / 5) * 5)) };
-}
-
 /**
  * Run the full transcription pipeline and return studio-ready notes.
  */
@@ -200,12 +169,10 @@ export async function transcribeToNotes(
   // 2. Preprocess (mono + resample)
   onProgress?.({ fraction: 0.02, stage: "preprocess" });
   const mono = resampleToMono(buffer, SAMPLE_RATE);
-  const effEnd = computeEndSeconds(mono);
-  const actual = Math.min(buffer.duration, effEnd);
 
   // Short clips need no model pass — return empty result.
-  if (actual < 0.4 || mono.length < SAMPLE_RATE * 0.4) {
-    return { notes: [], tempo: 120, durationSeconds: buffer.duration };
+  if (buffer.duration < 0.4 || mono.length < SAMPLE_RATE * 0.4) {
+    return { notes: [], tempo: 100, durationSeconds: buffer.duration };
   }
 
   const { module, instance } = await getBasicPitch();
@@ -230,39 +197,48 @@ export async function transcribeToNotes(
   );
 
   // 4. Convert model output → note events → time-based notes.
-  onProgress?.({ fraction: 0.72, stage: "convert" });
-  const notesInTime: { startTimeSeconds: number; durationSeconds: number; pitch_midi: number; amplitude: number; pitchBends?: number[] }[] = [];
+  onProgress?.({ fraction: 0.7, stage: "convert" });
+  const rawNotes: RawDetectedNote[] = [];
   if (frames.length > 0) {
-    const events = module.outputToNotesPoly(frames, onsets, 0.25, 0.25, 5);
+    // Tuned detection gate (reduces ghost notes):
+    //   onsetThreshold 0.6  → keep only clear attacks
+    //   frameThreshold 0.4  → trim background hum during onsets
+    //   minNoteLen 5 frames  → coarse length gate (see postprocess too)
+    const events = module.outputToNotesPoly(
+      frames,
+      onsets,
+      DEFAULT_POST_OPTIONS.onsetThreshold,
+      DEFAULT_POST_OPTIONS.frameThreshold,
+      5, // minNoteLen (frames)
+      true, // inferOnsets
+      midiToHz(DEFAULT_POST_OPTIONS.maxMidi), // maxFreq (≈ C7)
+      midiToHz(DEFAULT_POST_OPTIONS.minMidi), // minFreq (≈ C1)
+      true, // melodiaTrick
+    );
     const withBends = module.addPitchBendsToNoteEvents(contours, events);
     for (const time of module.noteFramesToTime(withBends)) {
-      notesInTime.push({
-        startTimeSeconds: time.startTimeSeconds,
-        durationSeconds: time.durationSeconds,
-        pitch_midi: time.pitchMidi,
-        amplitude: time.amplitude,
-        pitchBends: time.pitchBends,
+      rawNotes.push({
+        midi: time.pitchMidi,
+        start: time.startTimeSeconds,
+        duration: time.durationSeconds,
+        velocity: time.amplitude,
       });
     }
   }
 
-  // 5. Map to studio NoteData + infer tempo.
-  onProgress?.({ fraction: 0.9, stage: "tempo" });
-  const notes: NoteData[] = notesInTime
-    .map((n) => ({
-      midi: n.pitch_midi,
-      start: n.startTimeSeconds,
-      duration: n.durationSeconds,
-      velocity: Math.min(1, Math.max(0.25, n.amplitude)),
-    }))
-    .filter((n) => n.duration > 0.04)
-    .sort((a, b) => a.start - b.start);
+  // 5. Post-process: cleanup junk → estimate tempo → quantize.
+  //    Hold the "refining note accuracy" stage for a visible moment while
+  //    the fast post-processing math runs.
+  onProgress?.({ fraction: 0.8, stage: "refine" });
+  const [result] = await Promise.all([
+    Promise.resolve(postProcessNotes(rawNotes, DEFAULT_POST_OPTIONS)),
+    new Promise<void>((r) => setTimeout(r, 800)),
+  ]);
 
-  const { tempo } = inferTempo(notes);
   const durationSeconds = buffer.duration;
 
   onProgress?.({ fraction: 1, stage: "done" });
-  return { notes, tempo, durationSeconds };
+  return { notes: result.notes, tempo: result.tempo, durationSeconds };
 }
 
 /* ------------------------------------------------------------------ */

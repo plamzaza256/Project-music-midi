@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:postprocess": "node --experimental-strip-types scripts/test-postprocess.mjs"
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.1.16",

@@ -163,9 +163,12 @@
     "processing": {
       "steps": [
         "Reading waveform…",
+        "Analyzing audio data…",
         "Detecting notes & pitch…",
+        "Resolving melody & harmony…",
         "Estimating timing & tempo…",
-        "Building Piano Roll & Sheet Music…"
+        "Building Piano Roll & Sheet Music…",
+        "Refining note accuracy…"
       ],
       "title": "AI is transcribing your song…",
       "done": "Done!",

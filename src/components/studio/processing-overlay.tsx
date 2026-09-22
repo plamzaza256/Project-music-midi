@@ -15,7 +15,7 @@ const STAGE_STEP_DURATION = 850; // ms per label step (threshold fallback)
 export type ProcessingInfo = {
   /** 0..1 overall progress from the transcription engine. */
   progress: number;
-  /** Internal stage key ("decode" | "preprocess" | "model" | "convert" | "tempo" | "done"). */
+  /** Internal stage key ("decode" | "preprocess" | "model" | "convert" | "refine" | "done"). */
   stageKey: string;
 };
 
@@ -24,11 +24,22 @@ type Props = {
   info: ProcessingInfo;
 };
 
-const STAGE_KEYS = ["decode", "preprocess", "model", "convert", "tempo"];
+/*
+ * Maps engine stages → the 7-step UI list order. `model` spans several steps
+ * (dataset, decompose, tempo) because inference is the long phase; `refine`
+ * points at the final "polishing" step.
+ */
+const STAGE_TO_STEP: Record<string, number> = {
+  decode: 0,
+  preprocess: 1,
+  model: 2,
+  convert: 5,
+  refine: 6,
+  done: 6,
+};
 
-function labelIndexFor(stageKey: string, steps: string[]): number {
-  const idx = STAGE_KEYS.indexOf(stageKey);
-  return Math.max(0, Math.min(idx, steps.length - 1));
+function labelIndexFor(stageKey: string): number {
+  return STAGE_TO_STEP[stageKey] ?? 0;
 }
 
 /**
@@ -108,7 +119,7 @@ function StepsPanel({
   }, [steps.length]);
 
   // Which step is "current" — driven by the real progress when available.
-  const labelIdx = labelIndexFor(info.stageKey, steps);
+  const labelIdx = labelIndexFor(info.stageKey);
   const progressStep = Math.max(labelIdx, timerStep);
 
   return (
