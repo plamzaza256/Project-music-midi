@@ -1,0 +1,165 @@
+{
+  "direction": "ltr",
+  "brand": {
+    "name": "PianoMind AI",
+    "tagline": "Turn any song into piano & sheet music with AI",
+    "taglineShort": "AI music transcription"
+  },
+  "common": {
+    "getStarted": "Get Started Free",
+    "openStudio": "Open Studio",
+    "tryNow": "Try it now",
+    "learnMore": "Learn more",
+    "loading": "Loading…",
+    "comingSoon": "Coming soon"
+  },
+  "nav": {
+    "features": "Features",
+    "howItWorks": "How it works",
+    "studio": "Studio",
+    "github": "GitHub"
+  },
+  "landing": {
+    "badge": "Powered by AI · Audio to notation",
+    "hero": {
+      "title1": "Turn any song into",
+      "titleAccent": "piano & sheet music",
+      "title2": "in seconds",
+      "subtitle": "Upload audio, video, or a link and PianoMind AI transcribes it into a Piano Roll and Sheet Music — with synced piano playback. All in your browser."
+    },
+    "cta": { "primary": "Start transcribing", "secondary": "See how it works" },
+    "trust": [
+      "No installation required",
+      "Processed on your device",
+      "Supports MP3 · WAV · MP4"
+    ],
+    "features": {
+      "eyebrow": "FEATURES",
+      "title": "Everything you need to transcribe,",
+      "titleAccent": "in one place",
+      "subtitle": "A complete workflow — from dropping a file to playable notation.",
+      "items": [
+        {
+          "icon": "upload",
+          "title": "Upload anything",
+          "desc": "Drag & drop audio or video (MP3, WAV, MP4) or paste a link — the waveform appears instantly."
+        },
+        {
+          "icon": "waveform",
+          "title": "Interactive Waveform",
+          "desc": "See the audio, play, pause, seek, and change playback speed — all from one player."
+        },
+        {
+          "icon": "piano",
+          "title": "Smart Piano Roll",
+          "desc": "Every note rendered as bars on piano keys, with key names and lengths matched to timing."
+        },
+        {
+          "icon": "music",
+          "title": "Automatic Sheet Music",
+          "desc": "Transcribed MIDI becomes standard notation — ready to practice or edit further."
+        },
+        {
+          "icon": "sync",
+          "title": "Synced playback",
+          "desc": "Piano sound (Tone.js) plays the transcription in sync with the original, frame by frame."
+        },
+        {
+          "icon": "privacy",
+          "title": "100% private",
+          "desc": "Basic Pitch runs on your device — your audio never leaves the browser."
+        }
+      ]
+    },
+    "how": {
+      "eyebrow": "HOW IT WORKS",
+      "title": "From audio to notation in 3 steps",
+      "steps": [
+        {
+          "num": "01",
+          "title": "Upload a song",
+          "desc": "Drop an audio/video file or paste a link. The waveform loads instantly."
+        },
+        {
+          "num": "02",
+          "title": "AI transcribes",
+          "desc": "Basic Pitch analyzes every note — melody and timing — and turns it into MIDI."
+        },
+        {
+          "num": "03",
+          "title": "Play & export",
+          "desc": "Switch between Piano Roll and Sheet Music, play synced piano, or export your file."
+        }
+      ]
+    },
+    "ctaBand": {
+      "title": "Ready to transcribe your favorite song?",
+      "subtitle": "Start free — no signup, nothing to install.",
+      "button": "Open the Studio"
+    },
+    "footer": {
+      "rights": "All rights reserved",
+      "madeWith": "Built with Next.js, Tailwind, Tone.js and Basic Pitch"
+    }
+  },
+  "studio": {
+    "title": "Studio",
+    "subtitle": "Upload a song → AI transcribes → synced piano playback",
+    "browserTitle": "Studio — PianoMind AI",
+    "header": {
+      "back": "Back home",
+      "badgeDraft": "Draft",
+      "transcribe": "Transcribe",
+      "export": "Export"
+    },
+    "upload": {
+      "idleTitle": "Drop your song here",
+      "idleHint": "Drag & drop, or click to choose a file",
+      "formats": "Supports MP3 · WAV · MP4 · M4A",
+      "maxSize": "Up to 50 MB",
+      "browse": "Choose file",
+      "or": "or",
+      "urlLabel": "Paste a link",
+      "urlPlaceholder": "https://…  (audio / video link)",
+      "loadUrl": "Load link",
+      "demo": "Try sample audio",
+      "videoHint": "Audio will be extracted from video",
+      "unsupported": "This file type is not supported:",
+      "acceptedTitle": "File added",
+      "change": "Change file",
+      "detected": "detected",
+      "processingHint": "Hit “Transcribe” to let the AI decode your song."
+    },
+    "player": {
+      "ready": "Ready to play",
+      "speed": "Speed",
+      "play": "Play",
+      "pause": "Pause",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "time": "Time"
+    },
+    "viewer": {
+      "pianoRoll": "Piano Roll",
+      "sheetMusic": "Sheet Music",
+      "placeholderTitle": "Music notation view",
+      "placeholderDesc": "Phase 3 will render standard notation from the same MIDI behind Piano Roll — coming soon!",
+      "note": "Note"
+    },
+    "pianoRoll": {
+      "title": "Piano Roll — Preview",
+      "empty": "No notes yet — upload a song and hit “Transcribe”."
+    },
+    "processing": {
+      "steps": [
+        "Reading waveform…",
+        "Detecting notes & pitch…",
+        "Estimating timing & tempo…",
+        "Building Piano Roll & Sheet Music…"
+      ],
+      "title": "AI is transcribing your song…",
+      "done": "Done!",
+      "eta": "Usually takes 10–30 seconds"
+    }
+  }
+}
